@@ -1,6 +1,7 @@
 package hu.konczdam.testsupport.datainit
 
 import hu.konczdam.testsupport.dev.DevUserProvider
+import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.security.authentication.AbstractAuthenticationToken
 import org.springframework.security.core.authority.SimpleGrantedAuthority
 import org.springframework.security.core.context.SecurityContextHolder
@@ -9,29 +10,33 @@ import java.time.Clock
 import java.time.ZoneId
 
 /**
- * Interface for initializing test data entities.
+ * Base class for initializing test data entities.
  *
- * Implementations should be Spring beans (typically @Service) and annotated
+ * Subclasses should be Spring beans (typically @Service) and annotated
  * with @Initializes to declare which entity they create.
  *
  * @param T The entity type this initializer creates
  */
-interface EntityInitializer<T> {
+abstract class EntityInitializer<T> {
+    @Autowired
+    protected lateinit var devUserProvider: DevUserProvider
+        protected set
+
     /**
      * Initialize the entity and store it for later retrieval.
      */
-    fun initialize()
+    abstract fun initialize()
 
     /**
      * Get the default initialized entity.
      * @return The entity initialized by this initializer
      */
-    fun getDefaultEntity(): T
+    abstract fun getDefaultEntity(): T
 
     /**
      * Initialize the entity with a dev/test user authentication context.
      *
-     * Sets up a JWT authentication token with a fixed dev user ID,
+     * Sets up a JWT authentication token with a dev user ID from the DevUserProvider bean,
      * calls initialize(), then restores the original authentication.
      */
     fun initializeWithAuth() {
@@ -43,7 +48,7 @@ interface EntityInitializer<T> {
                 clock.instant(),
                 clock.instant().plusSeconds(3600),
                 mapOf("alg" to "none"),
-                mapOf("sub" to DevUserProvider.DEV_USER_ID, "roles" to listOf("ROLE_ADMIN")),
+                mapOf("sub" to devUserProvider.devUserId, "roles" to listOf("ROLE_ADMIN")),
             )
 
         // Create a custom authenticated token
@@ -51,7 +56,7 @@ interface EntityInitializer<T> {
             object : AbstractAuthenticationToken(listOf(SimpleGrantedAuthority("ROLE_ADMIN"))) {
                 override fun getCredentials(): Any = jwt
 
-                override fun getPrincipal(): Any = jwt.subject ?: DevUserProvider.DEV_USER_ID
+                override fun getPrincipal(): Any = jwt.subject ?: devUserProvider.devUserId
             }
         token.isAuthenticated = true
 
